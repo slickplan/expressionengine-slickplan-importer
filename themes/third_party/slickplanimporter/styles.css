@@ -1,0 +1,67 @@
+#slickplan-importer .alert-box {
+    background: #fff;
+    border-left: 4px solid #ffba00;
+    box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.1);
+    margin: 0 0 20px;
+    padding: 12px 15px 2px;
+}
+#slickplan-importer .alert-success {
+    border-left-color: #7ad03a;
+}
+#slickplan-importer .alert-error {
+    border-left-color: #dd3d36;
+}
+#slickplan-importer .input.buttons {
+    padding-top: 15px;
+}
+#slickplan-importer  .slickplan-page-title {
+    font-size: 125%;
+}
+#slickplan-importer .slickplan-option + .slickplan-option {
+    margin-top: 5px;
+}
+#slickplan-importer .slickplan-table {
+    width: 100%;
+}
+#slickplan-importer .slickplan-table h4 {
+    margin-bottom: 3px;
+}
+#slickplan-importer .slickplan-channels {
+    margin-top: 5px;
+}
+#slickplan-importer label.slickplan-margin {
+    margin-left: 10px;
+}
+#slickplan-importer .slickplan-table,
+#slickplan-importer table.padTable td .slickplan-table td {
+    border: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+#slickplan-importer table.padTable td .slickplan-table td {
+    vertical-align: top;
+}
+#slickplan-progressbar {
+    position: relative;
+    background: #fff;
+    border: 1px solid #aaa;
+    color: #222;
+    height: 29px;
+}
+#slickplan-progressbar .ui-progressbar-value {
+    background: #ccc;
+    color: #222;
+    font-weight: bold;
+    height: 100%;
+    width: 0;
+    -webkit-transition: width .2s ease;
+    -moz-transition: width .2s ease;
+    transition: width .2s ease;
+}
+#slickplan-progressbar .progress-label {
+    position: absolute;
+    left: 49%;
+    top: 5px;
+    font-weight: bold;
+    text-shadow: 1px 1px 0 #fff;
+}
