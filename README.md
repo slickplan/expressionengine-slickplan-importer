@@ -1,6 +1,8 @@
 # [Slickplan](http://slickplan.com) Importer - ExpressionEngine Module
 
-Slickplan Importer module for ExpressionEngine, imports pages from a [Slickplan.com](http://slickplan.com)’s XML export file into your ExpressionEngine (2.x) site.
+The Slickplan import module allows you to quickly import your [Slickplan.com](http://slickplan.com) projects into your ExpressionEngine (2.x) site.
+
+When you are finished planning your website project, import your [Slickplan.com](http://slickplan.com) website plan. Upon import, your pages, navigation structure, and content will be instantly ready in your CMS.
 
 ## Installation
 
