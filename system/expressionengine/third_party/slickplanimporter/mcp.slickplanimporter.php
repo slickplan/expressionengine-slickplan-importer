@@ -836,7 +836,7 @@ class Slickplanimporter_mcp
             $array
             and is_array($array)
             and isset($array['title'], $array['version'], $array['link'])
-            and is_string($array['link']) and substr($array['link'], 0, 17) === 'http://slickplan.'
+            and is_string($array['link']) and strstr($array['link'], 'slickplan.')
         );
         if ($first_test) {
             if ($parsed) {
