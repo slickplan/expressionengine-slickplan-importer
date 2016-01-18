@@ -2,7 +2,7 @@
 
 class Slickplanimporter_upd {
 
-	public $version = '1.0.0';
+	public $version = '1.0.1';
 
     /**
      * Install
