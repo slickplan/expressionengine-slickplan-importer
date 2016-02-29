@@ -1,5 +1,8 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 
+function_exists('ob_start') and ob_start();
+function_exists('set_time_limit') and set_time_limit(600);
+
 require_once dirname(__FILE__) . '/includes/helpers.php';
 
 class Slickplanimporter_mcp
@@ -15,6 +18,14 @@ class Slickplanimporter_mcp
         'users' => array(),
         'channel' => 0,
         'field' => 0,
+    );
+
+    /**
+     * @var array
+     */
+    public $import_options = array(
+        'internal_links' => array(),
+        'imported_pages' => array(),
     );
 
     /**
@@ -41,6 +52,13 @@ class Slickplanimporter_mcp
      * @var array
      */
     private $_ee_data = array();
+
+    /**
+     * If page has unparsed internal pages
+     *
+     * @var bool
+     */
+    private $_has_unparsed_internal_links = false;
 
     /**
      * Constructor
@@ -152,10 +170,16 @@ class Slickplanimporter_mcp
         $this->_ee_data['upload_dirs'] = ee()->file_upload_preferences_model->get_file_upload_preferences();
 
         $xml = $this->_getSavedXml();
+        $this->import_options = isset($xml['import_options']) ? $xml['import_options'] : array();
 
         if (isset($_POST['slickplan_importer']) and is_array($_POST['slickplan_importer'])) {
             foreach ($_POST['slickplan_importer'] as $page_id => $page_data) {
                 if (intval($page_data['import']) === 1 and isset($xml['pages'][$page_id])) {
+                    $page_data['content_files'] = (
+                        isset($page_data['content'], $page_data['content_files'])
+                        and $page_data['content'] === 'contents'
+                        and $page_data['content_files']
+                    );
                     $xml['pages'][$page_id]['_options'] = $page_data;
                 }
             }
@@ -179,12 +203,12 @@ class Slickplanimporter_mcp
     public function ajax()
     {
         $xml = $this->_getSavedXml();
+        $this->import_options = isset($xml['import_options']) ? $xml['import_options'] : array();
 
-        ee()->cp->add_to_head('<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">');
+        ee()->cp->add_to_head('<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">');
 
         if (isset($_POST['slickplan']) and is_array($_POST['slickplan'])) {
             $form = $_POST['slickplan'];
-            set_time_limit(600);
             $result = array();
             if (isset($xml['pages'][$form['page']]) and is_array($xml['pages'][$form['page']])) {
                 $mlid = (isset($form['mlid']) and $form['mlid'])
@@ -196,7 +220,10 @@ class Slickplanimporter_mcp
             }
             if (isset($form['last']) and $form['last']) {
                 $result['last'] = $form['last'];
+                $this->_checkForInternalLinks();
                 $this->_deleteXml();
+            } else {
+                $this->_saveXml($xml);
             }
             ob_clean();
             header('Content-Type: application/json');
@@ -268,8 +295,8 @@ class Slickplanimporter_mcp
                 $html .= '</td><td valign="top">'
                     . '<table cellspacing="0" cellpadding="0" border="0" class="slickplan-table"><tr><td>';
                 $html .= '<div class="slickplan-option">'
-                    . '<label><input type="radio" name="' . $field_name . '[content]" value="contents" class="slickplan-content" checked> Import page content</label>'
-                    . '<label class="slickplan-margin"><input type="radio" name="' . $field_name . '[content]" value="desc" class="slickplan-content"> Import page notes as content</label>'
+                    . '<label><input type="radio" name="' . $field_name . '[content]" value="contents" class="slickplan-content" checked> Import page content from Content Planner</label>'
+                    . '<label class="slickplan-margin"><input type="radio" name="' . $field_name . '[content]" value="desc" class="slickplan-content"> Import notes as page content</label>'
                     . '<label class="slickplan-margin"><input type="radio" name="' . $field_name . '[content]" value="" class="slickplan-content"> Don&#8217;t import any content</label>'
                     . '</div>'
                     . '<div class="slickplan-option slickplan-option-files">';
@@ -493,31 +520,7 @@ class Slickplanimporter_mcp
     }
 
     /**
-     * Import pages into Drupal.
-     *
-     * @param array $structure
-     * @param array $pages
-     * @param int $parent_id
-     */
-    private function _importPages(array $structure, array $pages, $parent_id = 0)
-    {
-        foreach ($structure as $page) {
-            if (isset($page['id'], $pages[$page['id']])) {
-                $result = $this->_importPage($pages[$page['id']], $parent_id);
-                if (
-                    isset($page['childs'], $result['mlid'])
-                    and $result['mlid']
-                    and is_array($page['childs'])
-                    and count($page['childs'])
-                ) {
-                    $this->_importPages($page['childs'], $pages, $result['mlid']);
-                }
-            }
-        }
-    }
-
-    /**
-     * Import single page into Drupal.
+     * Import single page into EE.
      *
      * @param array $data
      * @param int $parent_id
@@ -571,16 +574,60 @@ class Slickplanimporter_mcp
             }
         }
 
+        // Check if page has internal links, we need to replace them later
+        $this->_has_unparsed_internal_links = false;
+        if (isset($page['field_id_' . $this->options['field']]) and $page['field_id_' . $this->options['field']]) {
+            $updated_content = $this->_parseInternalLinks($page['field_id_' . $this->options['field']]);
+            if ($updated_content) {
+                $page['field_id_' . $this->options['field']] = $updated_content;
+            }
+        }
+
+        $templates = array();
+        $tquery = ee()->db->query("SELECT exp_template_groups.group_name, exp_templates.template_name, exp_templates.template_id
+            FROM exp_template_groups, exp_templates
+            WHERE exp_template_groups.group_id = exp_templates.group_id
+            AND exp_templates.site_id = '" . ee()->db->escape_str(ee()->config->item('site_id')) . "'");
+        foreach ($tquery->result_array() as $row) {
+            $templates[$row['template_id']] = $row['group_name'].'/'.$row['template_name'];
+        }
+
         ee()->api_channel_fields->setup_entry_settings($this->options['channel'], $page);
         $success = ee()->api_channel_entries->save_entry($page, $this->options['channel']);
         if ($success) {
+            $url = '/';
+            $channel_data = ee()->api_channel_structure->channel_info;
+            if (is_array($channel_data)) {
+                $channel_data = array_shift($channel_data);
+                if (isset($channel_data->row_data['live_look_template'], $templates[$channel_data->row_data['live_look_template']])) {
+                    $url = ee()->functions->create_url($templates[$channel_data->row_data['live_look_template']] . '/' . ee()->api_channel_entries->entry_id);
+                }
+            }
+
             $return = array(
                 'ID' => ee()->api_channel_entries->entry_id,
                 'title' => $page['title'],
-                'url' => '/', // todo
+                'url' => $url,
                 'mlid' => ee()->api_channel_entries->entry_id,
                 'files' => $this->_files,
             );
+
+            // Save page permalink
+            if (isset($data['@attributes']['id'])) {
+                $this->import_options['imported_pages'][$data['@attributes']['id']] = $return['url'];
+            }
+
+            // Check if page has unparsed internal links, we need to replace them later
+            if ($this->_has_unparsed_internal_links) {
+                $this->import_options['internal_links'][] = array(
+                    'entry_id' => $return['ID'],
+                    'field_id' => $this->options['field'],
+                    'chanel_id' => $this->options['channel'],
+                    'content' => isset($page['field_id_' . $this->options['field']])
+                        ? $page['field_id_' . $this->options['field']]
+                        : '',
+                );
+            }
         } else {
             $return = array(
                 'title' => $page['title'],
@@ -1005,6 +1052,7 @@ class Slickplanimporter_mcp
      */
     private function _saveXml(array $xml)
     {
+        $xml['import_options'] = $this->import_options;
         ee()->db->insert('slickplan_importer', array(
             'xml' => serialize($xml),
         ));
@@ -1048,6 +1096,59 @@ class Slickplanimporter_mcp
             ee()->db->delete('slickplan_importer', array('id' => $row->id));
         } while ($row and $row->id);
         return true;
+    }
+
+    /**
+     * Replace internal links with correct pages URLs.
+     *
+     * @param $content
+     * @param $force_parse
+     * @return bool
+     */
+    private function _parseInternalLinks($content, $force_parse = false)
+    {
+        preg_match_all('/href="slickplan:([a-z0-9]+)"/isU', $content, $internal_links);
+        if (isset($internal_links[1]) and is_array($internal_links[1]) and count($internal_links[1])) {
+            $internal_links = array_unique($internal_links[1]);
+            $links_replace = array();
+            foreach ($internal_links as $cell_id) {
+                if (
+                    isset($this->import_options['imported_pages'][$cell_id])
+                    and $this->import_options['imported_pages'][$cell_id]
+                ) {
+                    $links_replace['="slickplan:' . $cell_id . '"'] = '="'
+                        . htmlspecialchars($this->import_options['imported_pages'][$cell_id]) . '"';
+                } elseif ($force_parse) {
+                    $links_replace['="slickplan:' . $cell_id . '"'] = '="#"';
+                } else {
+                    $this->_has_unparsed_internal_links = true;
+                }
+            }
+            if (count($links_replace)) {
+                return strtr($content, $links_replace);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if there are any pages with unparsed internal links, if yes - replace links with real URLs
+     */
+    private function _checkForInternalLinks()
+    {
+        if (isset($this->import_options['internal_links']) and is_array($this->import_options['internal_links'])) {
+            foreach ($this->import_options['internal_links'] as $data) {
+                if ($data['field'] and ee()->api_channel_entries->entry_exists($data['entry_id'])) {
+                    $page_content = $this->_parseInternalLinks($data['content'], true);
+                    if ($page_content) {
+                        $page = array();
+                        $page['field_id_' . $data['field']] = $page_content;
+                        ee()->api_channel_fields->setup_entry_settings($data['channel_id'], $page);
+                        ee()->api_channel_entries->save_entry($page, $data['chanel_id'], $data['entry_id']);
+                    }
+                }
+            }
+        }
     }
 
 }

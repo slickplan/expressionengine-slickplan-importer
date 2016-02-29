@@ -5,10 +5,13 @@
         slickplaninporter_message_box($errors, 'error');
     } else {
         slickplaninporter_message_box(array(
-            'This importer allows you to import pages structure from a '
-                . '<a href="http://slickplan.com/" target="_blank">Slickplan</a>’s '
-                . 'XML file into your ExpressionEngine site.',
-            'Pick a XML file to upload and click Upload.',
+            'The Slickplan Importer plugin allows you to quickly import your '
+                . '<a href="https://slickplan.com/" target="_blank">Slickplan</a> '
+                . 'projects into your ExpressionEngine site.',
+            'Upon import, your pages, navigation structure, and content will be instantly ready in your CMS.',
+        ));
+        slickplaninporter_message_box(array(
+            'Pick a XML file to upload and click Import.',
         ));
     }
     $data = array(
