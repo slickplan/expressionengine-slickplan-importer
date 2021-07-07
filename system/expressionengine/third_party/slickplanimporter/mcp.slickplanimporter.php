@@ -548,7 +548,8 @@ class Slickplanimporter_mcp
 
         // Set url slug
         if (isset($data['contents']['url_slug']) and $data['contents']['url_slug']) {
-            $page['url_title'] = $data['contents']['url_slug'];
+            $page['url_title'] = str_replace('%page_name%', $page['title'], $page['url_title']);
+            $page['url_title'] = str_replace('%separator%', '-', $page['url_title']);
         }
 
         // Set post author
@@ -700,54 +701,58 @@ class Slickplanimporter_mcp
                         $html .= htmlspecialchars($element['content']);
                         break;
                     case 'image':
-                        if (isset($element['content']['type'], $element['content']['url'])) {
-                            $attrs = array(
-                                'alt' => isset($element['content']['alt'])
-                                    ? $element['content']['alt']
-                                    : '',
-                                'title' => isset($element['content']['title'])
-                                    ? $element['content']['title']
-                                    : '',
-                                'file_name' => isset($element['content']['file_name'])
-                                    ? $element['content']['file_name']
-                                    : '',
-                            );
-                            if ($element['content']['type'] === 'library') {
-                                $src = $this->_addMedia($element['content']['url'], $attrs);
-                            } else {
-                                $src = $element['content']['url'];
-                            }
-                            if ($src and is_string($src)) {
-                                $html .= '<img src="' . htmlspecialchars($src)
-                                    . '" alt="' . htmlspecialchars($attrs['alt'])
-                                    . '" title="' . htmlspecialchars($attrs['title']) . '" />';
+                        foreach ($this->_getMediaElementArray($element) as $item) {
+                            if (isset($item['type'], $item['url'])) {
+                                $attrs = array(
+                                    'alt' => isset($item['alt'])
+                                        ? $item['alt']
+                                        : '',
+                                    'title' => isset($item['title'])
+                                        ? $item['title']
+                                        : '',
+                                    'file_name' => isset($item['file_name'])
+                                        ? $item['file_name']
+                                        : '',
+                                );
+                                if ($item['type'] === 'library') {
+                                    $src = $this->_addMedia($item['url'], $attrs);
+                                } else {
+                                    $src = $item['url'];
+                                }
+                                if ($src and is_string($src)) {
+                                    $html .= '<img src="' . htmlspecialchars($src)
+                                        . '" alt="' . htmlspecialchars($attrs['alt'])
+                                        . '" title="' . htmlspecialchars($attrs['title']) . '" />';
+                                }
                             }
                         }
                         break;
                     case 'video':
                     case 'file':
-                        if (isset($element['content']['type'], $element['content']['url'])) {
-                            $attrs = array(
-                                'description' => isset($element['content']['description'])
-                                    ? $element['content']['description']
-                                    : '',
-                                'file_name' => isset($element['content']['file_name'])
-                                    ? $element['content']['file_name']
-                                    : '',
-                            );
-                            if ($element['content']['type'] === 'library') {
-                                $src = $this->_addMedia($element['content']['url'], $attrs);
-                                $name = basename($src);
-                            } else {
-                                $src = $element['content']['url'];
-                                $name = $src;
-                            }
-                            if ($src and is_string($src)) {
-                                $name = $attrs['description']
-                                    ? $attrs['description']
-                                    : ($attrs['file_name'] ? $attrs['file_name'] : $name);
-                                $html .= '<a href="' . htmlspecialchars($src) . '" title="'
-                                    . htmlspecialchars($attrs['description']) . '">' . $name . '</a>';
+                        foreach ($this->_getMediaElementArray($element) as $item) {
+                            if (isset($item['type'], $item['url'])) {
+                                $attrs = array(
+                                    'description' => isset($item['description'])
+                                        ? $item['description']
+                                        : '',
+                                    'file_name' => isset($item['file_name'])
+                                        ? $item['file_name']
+                                        : '',
+                                );
+                                if ($item['type'] === 'library') {
+                                    $src = $this->_addMedia($item['url'], $attrs);
+                                    $name = basename($src);
+                                } else {
+                                    $src = $item['url'];
+                                    $name = $src;
+                                }
+                                if ($src and is_string($src)) {
+                                    $name = $attrs['description']
+                                        ? $attrs['description']
+                                        : ($attrs['file_name'] ? $attrs['file_name'] : $name);
+                                    $html .= '<a href="' . htmlspecialchars($src) . '" title="'
+                                        . htmlspecialchars($attrs['description']) . '">' . $name . '</a>';
+                                }
                             }
                         }
                         break;
@@ -1149,6 +1154,18 @@ class Slickplanimporter_mcp
                 }
             }
         }
+    }
+
+    /**
+     * @param array $element
+     * @return array
+     */
+    private function _getMediaElementArray(array $element): array
+    {
+        $items = $element['content']['contentelement'] ?? $element['content'];
+        return isset($items['type'])
+            ? [$items]
+            : (isset($items[0]['type']) ? $items : []);
     }
 
 }
